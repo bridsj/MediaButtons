@@ -18,6 +18,7 @@ package com.github.mediabuttons;
 
 import java.util.ArrayList;
 
+import android.annotation.SuppressLint;
 import android.app.IntentService;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
@@ -26,6 +27,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioManager;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -52,11 +54,13 @@ public class Broadcaster extends IntentService {
         super("Broadcaster");
     }
 
-    @Override
+    @SuppressLint("NewApi")
+	@Override
     protected void onHandleIntent(Intent intent) {
-        // TODO Auto-generated method stub
         String action = intent.getAction();
+        
         Log.d(Widget.TAG, "Got intent " + action);
+        
         if (action.equals(BROADCAST_MEDIA_BUTTON)) {
             // Sent by the widgets.  Broadcast on their behalf.
 
@@ -67,25 +71,19 @@ public class Broadcaster extends IntentService {
             long downTime = upTime - 1;
 
             int keycode = Integer.parseInt(intent.getData().getHost());
-            Log.d(Widget.TAG, "Got keycode " + keycode);
-
+            Log.d(Widget.TAG, "Got keycode " + keycode+ " : "+KeyEvent.keyCodeToString(keycode));
+			
+         
             KeyEvent downKeyEvent = new KeyEvent(
                     downTime, downTime, KeyEvent.ACTION_DOWN, keycode, 0);
-            Intent downIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
-            downIntent.putExtra(Intent.EXTRA_KEY_EVENT, downKeyEvent);
-            // Note that sendOrderedBroadcast is needed since there is only
-            // one official receiver of the media button intents at a time
-            // (controlled via AudioManager) so the system needs to figure
-            // out who will handle it rather than just send it to everyone.
-            sendOrderedBroadcast(downIntent, null);
-
+            handleMediaKeyEvent(downKeyEvent);
+            
             KeyEvent upKeyEvent = new KeyEvent(
                     downTime, upTime, KeyEvent.ACTION_UP, keycode, 0);
-            Intent upIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
-            upIntent.putExtra(Intent.EXTRA_KEY_EVENT, upKeyEvent);
-            sendOrderedBroadcast(upIntent, null);
+            handleMediaKeyEvent(upKeyEvent);
 
             if (keycode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+            	 Log.d(Widget.TAG, "Play/Pause Received");
                 // If we are pausing or starting music, start updater to
                 // check for when it actually stops or starts.
                 startUpdater(5);
@@ -100,9 +98,68 @@ public class Broadcaster extends IntentService {
             // double check the widgets.  We don't expect the music state to
             // actually change, so we only check once.
             startUpdater(1);
-        } else if (action.equals(INVALIDATE_WIDGET_LIST)) {
-            updateWidgetIds();
+            //
+        } else if (action.equals(Intent.ACTION_USER_PRESENT)) {
+        	startUpdater(1);
         }
+        else if (action.equals(INVALIDATE_WIDGET_LIST)) {
+            updateWidgetIds();
+        } 
+    }
+    
+    /**
+     * Send the passed media key event to the AudioManager by any means necessary
+     * 
+     * @param keyEvent event to send to AudioManager
+     */
+    public void handleMediaKeyEvent(KeyEvent keyEvent) {
+    	boolean dispatchMediaKeyEvent = false;
+    	
+    	// Added to support Samsung devices running JellyBean 4.1.0
+    	// All messages being intercepted by Google Music player instead of the registered receiver 
+    	
+    	/*
+    	 * Attempt to execute the following with reflection. Methods are not part of standard jars
+    	 * 
+    	 * [Code]
+    	 * IAudioService audioService = IAudioService.Stub.asInterface(b);
+    	 * audioService.dispatchMediaKeyEvent(keyEvent);
+    	 */
+    	try {
+    		
+    		// Get binder from ServiceManager.checkService(String)
+    		IBinder iBinder  = (IBinder) Class.forName("android.os.ServiceManager")
+			.getDeclaredMethod("checkService",String.class)
+			.invoke(null, Context.AUDIO_SERVICE);
+			
+    		// get audioService from IAudioService.Stub.asInterface(IBinder)
+    		Object audioService  = Class.forName("android.media.IAudioService$Stub")
+    				.getDeclaredMethod("asInterface",IBinder.class)
+    				.invoke(null,iBinder);
+    		
+    		// Dispatch keyEvent using IAudioService.dispatchMediaKeyEvent(KeyEvent)
+    		Class.forName("android.media.IAudioService")
+    		.getDeclaredMethod("dispatchMediaKeyEvent",KeyEvent.class)
+    		.invoke(audioService, keyEvent);
+
+    		dispatchMediaKeyEvent = true;
+    		
+    		
+    	}  catch (Exception e1) {
+    		e1.printStackTrace();
+    	}
+    	
+    	// If dispatchMediaKeyEvent failed then try using broadcast
+    	if(!dispatchMediaKeyEvent){
+    		Intent intent = new Intent(Intent.ACTION_MEDIA_BUTTON);
+    		intent.putExtra(Intent.EXTRA_KEY_EVENT, keyEvent);
+    		// Note that sendOrderedBroadcast is needed since there is only
+    		// one official receiver of the media button intents at a time
+    		// (controlled via AudioManager) so the system needs to figure
+    		// out who will handle it rather than just send it to everyone.
+    		sendOrderedBroadcast(intent, null);
+    	}
+       
     }
 
     /**
@@ -209,6 +266,8 @@ public class Broadcaster extends IntentService {
                 // Reschedule for 1 second later.
                 mHandler.postDelayed(this, 1000);
             }
+            
+            
         }
     };
 }

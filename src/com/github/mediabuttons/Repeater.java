@@ -34,6 +34,7 @@ public class Repeater extends BroadcastReceiver {
     // Enforce singleton status with private constructor.
     private Repeater() {
         super();
+        
     }
     
     @Override
@@ -55,7 +56,27 @@ public class Repeater extends BroadcastReceiver {
         Log.d(Widget.TAG, "Starting repeater");
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_USER_PRESENT);
         filter.addAction(Intent.ACTION_HEADSET_PLUG);
+        
+        //filter.addAction(Intent.ACTION_MEDIA_BUTTON);
+        
+        //  Not for right now but can use this to get meta data about tracks, title , artist etc etc.
+        /*
+        filter.addAction("com.android.music.metachanged");
+        filter.addAction("com.htc.music.metachanged");
+        filter.addAction("fm.last.android.metachanged");
+        filter.addAction("com.sec.android.app.music.metachanged");
+        filter.addAction("com.nullsoft.winamp.metachanged");
+        filter.addAction("com.amazon.mp3.metachanged");     
+        filter.addAction("com.miui.player.metachanged");        
+        filter.addAction("com.real.IMP.metachanged");
+        filter.addAction("com.sonyericsson.music.metachanged");
+        filter.addAction("com.rdio.android.metachanged");
+        filter.addAction("com.samsung.sec.android.MusicPlayer.metachanged");
+        filter.addAction("com.andrew.apollo.metachanged");
+        */
+        
         sRepeater = new Repeater();
         context.registerReceiver(sRepeater, filter);
     }
